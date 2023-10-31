@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract WarehouseManagement {
+    address public owner;
+    uint public productCount;
+    uint public inventoryBalance;
+
+    enum ProductStatus { InStock, OutOfStock }
+
+    struct Product {
+        uint productId;
+        string name;
+        uint quantity;
+        uint price;
+        string batchNumber;
+        uint expirationDate;
+        ProductStatus status;
+        address owner;
+    }
+
+    mapping(uint => Product) public products;
+    mapping(address => bool) public admins;
+
+    event ProductAdded(uint productId, string name, uint quantity, uint price, string batchNumber, uint expirationDate, address owner);
+    event ProductTransferred(uint productId, address newOwner);
+    event InventoryDeposit(uint amount);
+    event InventoryWithdrawal(uint amount);
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Only the owner can perform this operation");
+        _;
+    }
+
+    modifier onlyAdmin() {
+        require(admins[msg.sender], "Only admins can perform this operation");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+        admins[msg.sender] = true;
+        productCount = 0;
+        inventoryBalance = 0;
+    }
+
+    function addProduct(string memory _name, uint _quantity, uint _price, string memory _batchNumber, uint _expirationDate) public onlyAdmin {
+        require(_quantity > 0, "Quantity must be greater than zero");
+        productCount++;
+        products[productCount] = Product(productCount, _name, _quantity, _price, _batchNumber, _expirationDate, ProductStatus.InStock, owner);
+        emit ProductAdded(productCount, _name, _quantity, _price, _batchNumber, _expirationDate, owner);
+    }
+
+    function transferProductOwnership(uint _productId, address _newOwner) public {
+        require(_productId > 0 && _productId <= productCount, "Invalid product ID");
+        Product storage product = products[_productId];
+        require(product.owner == msg.sender, "You can only transfer ownership of your products");
+        require(_newOwner != address(0), "Invalid new owner address");
+        product.owner = _newOwner;
+        emit ProductTransferred(_productId, _newOwner);
+    }
+
+    function depositInventory() public payable onlyAdmin {
+        require(msg.value > 0, "Deposit amount must be greater than zero");
+        inventoryBalance += msg.value;
+        emit InventoryDeposit(msg.value);
+    }
+
+    function withdrawInventory(uint _amount) public onlyAdmin {
+        require(_amount > 0 && _amount <= inventoryBalance, "Invalid withdrawal amount");
+        inventoryBalance -= _amount;
+        payable(msg.sender).transfer(_amount);
+        emit InventoryWithdrawal(_amount);
+    }
+
+    function getProduct(uint _productId) public view returns (uint, string memory, uint, uint, string memory, uint, ProductStatus, address) {
+        require(_productId > 0 && _productId <= productCount, "Invalid product ID");
+        Product storage product = products[_productId];
+        return (product.productId, product.name, product.quantity, product.price, product.batchNumber, product.expirationDate, product.status, product.owner);
+    }
+
+    function toggleAdminStatus(address _user) public onlyOwner {
+        admins[_user] = !admins[_user];
+    }
+
+    function setProductStatus(uint _productId, ProductStatus _status) public onlyAdmin {
+        require(_productId > 0 && _productId <= productCount, "Invalid product ID");
+        Product storage product = products[_productId];
+        product.status = _status;
+    }
+}
